@@ -154,7 +154,7 @@ async function scrapeFandomPage(url) {
   // Extract Cover Image URL - Enhanced Selectors & Debugging
   let imageUrl = null;
   let imageElement = null;
-  console.log("--- Debugging Image Extraction ---"); // Debug line
+  // console.log("--- Debugging Image Extraction ---"); // Debug line
 
   // Try common high-priority selectors first
   const selectors = [
@@ -171,7 +171,7 @@ async function scrapeFandomPage(url) {
     imageElement = $(selector).first();
     if (imageElement.length) {
       const src = imageElement.attr('src');
-      console.log(`[Debug] Selector '${selector}' found src: ${src}`); // Debug line
+      // console.log(`[Debug] Selector '${selector}' found src: ${src}`); // Debug line
       if (src) {
         imageUrl = src;
         break;
@@ -184,7 +184,7 @@ async function scrapeFandomPage(url) {
     const userLink = $('div.wds-is-current.wds-tab__content .pi-image.pi-item a.image-thumbnail.image').first();
     if (userLink.length) {
         const href = userLink.attr('href');
-        console.log(`[Debug] User selector link found href: ${href}`); // Debug line
+        // console.log(`[Debug] User selector link found href: ${href}`); // Debug line
         if (href && (href.startsWith('http') || href.startsWith('//'))) { // Check if it looks like a direct image URL
             imageUrl = href;
         }
@@ -195,7 +195,7 @@ async function scrapeFandomPage(url) {
     imageElement = $('aside[role="complementary"] img[data-image-name]').first();
     if (imageElement.length) {
       const src = imageElement.attr('src');
-      console.log(`[Debug] Fallback 'img[data-image-name]' found src: ${src}`); // Debug line
+      // console.log(`[Debug] Fallback 'img[data-image-name]' found src: ${src}`); // Debug line
       imageUrl = src;
     }
   }
@@ -205,10 +205,10 @@ async function scrapeFandomPage(url) {
     $('aside[role="complementary"] img').each((i, el) => {
         const img = $(el);
         const src = img.attr('src');
-        console.log(`[Debug] General fallback iteration, src: ${src}`); // Debug line
+        // console.log(`[Debug] General fallback iteration, src: ${src}`); // Debug line
         if (src && !src.toLowerCase().endsWith('.svg')) {
             if (img.closest('a.image').length || img.closest('a').length) {
-                console.log(`[Debug] General fallback (non-svg, in link) selected src: ${src}`); // Debug line
+                // console.log(`[Debug] General fallback (non-svg, in link) selected src: ${src}`); // Debug line
                 imageUrl = src;
                 return false; 
             }
@@ -221,11 +221,11 @@ async function scrapeFandomPage(url) {
     imageElement = $('aside[role="complementary"] img').first();
     if (imageElement.length) {
       const src = imageElement.attr('src');
-      console.log(`[Debug] Aggressive final fallback (first img in aside) found src: ${src}`); // Debug line
+      // console.log(`[Debug] Aggressive final fallback (first img in aside) found src: ${src}`); // Debug line
       imageUrl = src;
     }
   }
-  console.log("--- End Debugging Image Extraction ---"); // Debug line
+  // console.log("--- End Debugging Image Extraction ---"); // Debug line
 
     // Clean up Fandom image URLs (remove scaling parameters)
     if (imageUrl && imageUrl.includes('static.wikia.nocookie.net')) {
@@ -313,30 +313,28 @@ async function scrapeFandomPage(url) {
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) {
-    console.log("Please provide a Fandom URL as a command-line argument.");
-    console.log("Example: node scraper.js <URL>");
+    console.error("Please provide a Fandom URL as a command-line argument.");
+    console.error("Example: node scraper.js <URL>");
     return;
   }
   // Trim the URL
   const urlToScrape = args[0].trim(); 
-  console.log(`Scraping: ${urlToScrape}\n`);
-
-  const data = await scrapeFandomPage(urlToScrape);
-  if (data) {
-    console.log("Scraped Data:");
-    const allFields = [
-        'title', 'plot_summary', 'characters', 'locations', 'author', 
-        'cover_artist', 'genre', 'based_on', 'publisher', 
-        'publication_date', 'pages', 'preceded_by', 'followed_by', 'cover_image_url'
-    ];
-    allFields.forEach(field => {
-        const fieldName = field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        // Ensure that even if a field is missing from scrapedData, it's printed as null
-        const value = data[field] !== undefined ? data[field] : null;
-        console.log(`${fieldName}: ${JSON.stringify(value, null, 2)}`);
-    });
-  } else {
-    console.log("Could not scrape data from the URL.");
+  
+  try {
+    const data = await scrapeFandomPage(urlToScrape);
+    if (data) {
+      // Instead of formatted output, just stringify the full object as JSON to stdout
+      console.log(JSON.stringify(data));
+    } else {
+      // Use console.error for error messages so they don't interfere with JSON output
+      console.error("Could not scrape data from the URL.");
+      // Return empty JSON object if scraping failed
+      console.log("{}");
+    }
+  } catch (error) {
+    console.error("Error during scraping:", error);
+    // Return empty JSON object on error
+    console.log("{}");
   }
 }
 
