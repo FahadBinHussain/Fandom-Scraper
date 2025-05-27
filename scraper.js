@@ -1,5 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const { URL } = require('url'); // Added for URL parsing
 
 async function fetchHTML(url) {
   try {
@@ -150,6 +151,97 @@ async function scrapeFandomPage(url) {
   scrapedData.preceded_by = getInfoboxData($, 'preceded_by') || getInfoboxData($, 'preceded by');
   scrapedData.followed_by = getInfoboxData($, 'followed_by') || getInfoboxData($, 'followed by');
 
+  // Extract Cover Image URL - Enhanced Selectors & Debugging
+  let imageUrl = null;
+  let imageElement = null;
+  console.log("--- Debugging Image Extraction ---"); // Debug line
+
+  // Try common high-priority selectors first
+  const selectors = [
+    'div.wds-is-current.wds-tab__content .pi-image.pi-item a.image-thumbnail.image img',
+    'div.wds-is-current.wds-tab__content .pi-image.pi-item img',
+    'aside[role="complementary"] figure.pi-item.pi-image a.image img', 
+    'aside[role="complementary"] div.pi-item.pi-image a.image img',
+    'aside[role="complementary"] td.pi-image a.image img',
+    'aside[role="complementary"] a.image.image-thumbnail img',
+    'aside[role="complementary"] div.thumbimage img'
+  ];
+
+  for (const selector of selectors) {
+    imageElement = $(selector).first();
+    if (imageElement.length) {
+      const src = imageElement.attr('src');
+      console.log(`[Debug] Selector '${selector}' found src: ${src}`); // Debug line
+      if (src) {
+        imageUrl = src;
+        break;
+      }
+    }
+  }
+
+  // Fallback to any image in the infobox with data-image-name
+  if (!imageUrl) {
+    const userLink = $('div.wds-is-current.wds-tab__content .pi-image.pi-item a.image-thumbnail.image').first();
+    if (userLink.length) {
+        const href = userLink.attr('href');
+        console.log(`[Debug] User selector link found href: ${href}`); // Debug line
+        if (href && (href.startsWith('http') || href.startsWith('//'))) { // Check if it looks like a direct image URL
+            imageUrl = href;
+        }
+    }
+  }
+  
+  if (!imageUrl) {
+    imageElement = $('aside[role="complementary"] img[data-image-name]').first();
+    if (imageElement.length) {
+      const src = imageElement.attr('src');
+      console.log(`[Debug] Fallback 'img[data-image-name]' found src: ${src}`); // Debug line
+      imageUrl = src;
+    }
+  }
+  
+  // More general fallback: first img in infobox that is likely a content image (non-SVG, in a link)
+  if (!imageUrl) {
+    $('aside[role="complementary"] img').each((i, el) => {
+        const img = $(el);
+        const src = img.attr('src');
+        console.log(`[Debug] General fallback iteration, src: ${src}`); // Debug line
+        if (src && !src.toLowerCase().endsWith('.svg')) {
+            if (img.closest('a.image').length || img.closest('a').length) {
+                console.log(`[Debug] General fallback (non-svg, in link) selected src: ${src}`); // Debug line
+                imageUrl = src;
+                return false; 
+            }
+        }
+    });
+  }
+
+   // Aggressive final fallback: first image found in infobox, whatever it is.
+   if (!imageUrl) {
+    imageElement = $('aside[role="complementary"] img').first();
+    if (imageElement.length) {
+      const src = imageElement.attr('src');
+      console.log(`[Debug] Aggressive final fallback (first img in aside) found src: ${src}`); // Debug line
+      imageUrl = src;
+    }
+  }
+  console.log("--- End Debugging Image Extraction ---"); // Debug line
+
+    // Clean up Fandom image URLs (remove scaling parameters)
+    if (imageUrl && imageUrl.includes('static.wikia.nocookie.net')) {
+        try {
+            const urlObj = new URL(imageUrl);
+            urlObj.pathname = urlObj.pathname.replace(/\/scale-to-width-down\/\d+/g, ''); // Remove scaling path
+            urlObj.pathname = urlObj.pathname.replace(/\/revision\/.*/, ''); // Remove /revision/... part
+            urlObj.search = ''; // Remove query parameters like ?cb=
+            imageUrl = urlObj.toString();
+        } catch (e) {
+            // If URL parsing fails, use the original imageUrl
+            console.warn("Could not parse image URL for cleanup:", imageUrl, e.message);
+        }
+    }
+  scrapedData.cover_image_url = imageUrl || null;
+
   // Extract Plot Summary using the updated findSectionHeader
   const plotHeader = findSectionHeader($, ['Plot summary', 'Summary', 'Synopsis']);
   if (plotHeader && plotHeader.length) {
@@ -235,7 +327,7 @@ async function main() {
     const allFields = [
         'title', 'plot_summary', 'characters', 'locations', 'author', 
         'cover_artist', 'genre', 'based_on', 'publisher', 
-        'publication_date', 'pages', 'preceded_by', 'followed_by'
+        'publication_date', 'pages', 'preceded_by', 'followed_by', 'cover_image_url'
     ];
     allFields.forEach(field => {
         const fieldName = field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
